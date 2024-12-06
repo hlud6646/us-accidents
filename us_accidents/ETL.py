@@ -51,22 +51,20 @@ df = pl.scan_csv("data/US_Accidents_March23.csv", try_parse_dates=True)
 
 df = df.select(
     # pl.col("ID"),
-    pl.col("Severity").alias('severity'),
-    pl.col("Start_Time").alias('datetime'),
-    pl.col("Start_Lat").alias('lat'),
-    pl.col("Start_Lng").alias('lng'),
-    pl.col("Weather_Condition").alias('weather_condition'),
+    pl.col("Severity").alias("severity"),
+    pl.col("Start_Time").alias("datetime"),
+    pl.col("Start_Lat").alias("lat"),
+    pl.col("Start_Lng").alias("lng"),
+    pl.col("Weather_Condition").alias("weather_condition"),
     pl.col("City"),
     pl.col("State"),
-    pl.col("County")
+    pl.col("County"),
 )
 
 LOGGER.info("Creating lazy frame for cities")
-cities_df = df.select(
-    pl.col('City'),
-    pl.col('State'),
-    pl.col('County')
-).with_row_index(name='city_id')
+cities_df = df.select(pl.col("City"), pl.col("State"), pl.col("County")).with_row_index(
+    name="city_id"
+)
 
 # %% Write cities
 LOGGER.info("Writing cities to database")
@@ -74,13 +72,8 @@ cities_df.collect().write_database(table_name="cities", connection=DB_URI)
 
 # %% Transform accidents
 LOGGER.info("Replacing city, county, and state columns with city_id")
-df = (
-    df.join(
-        cities_df,
-        on=['City', 'County', 'State'], 
-        how='left'
-    )
-    .select(pl.exclude(['City', 'County', 'State']))
+df = df.join(cities_df, on=["City", "County", "State"], how="left").select(
+    pl.exclude(["City", "County", "State"])
 )
 
 
@@ -93,7 +86,7 @@ os.remove("data/US_Accidents_March23.csv")
 
 
 # %% DB constraints
-# It feels a bit clunky to do this via sqlalchemy, but since there are only 
+# It feels a bit clunky to do this via sqlalchemy, but since there are only
 # two commands to execute we can avoid a subprocess.
 with DB_ENGINE.connect() as conn:
     conn.execute(
@@ -118,46 +111,49 @@ with DB_ENGINE.connect() as conn:
     conn.commit()
 
 
-
-
-
 # %% Postscript
 # The following quieries describe the non-uniqueness of city names in the US.
 
 # Are city names unique?
-cities_df.group_by('City').agg(pl.len().alias('count')).sort('count', descending=True).head(5).collect()
+(
+    cities_df.group_by("City")
+    .agg(pl.len().alias("count"))
+    .sort("count", descending=True)
+    .head(5)
+    .collect()
+)
 # No.
 
 
-# Does (name, state) uniquely identify a city?
+# Does (city name, state) uniquely identify a city?
 (
-    cities_df
-    .group_by('City', 'State')
-    .agg(pl.len().alias('count'))
-    .sort('count', descending=True)
+    cities_df.group_by("City", "State")
+    .agg(pl.len().alias("count"))
+    .sort("count", descending=True)
     .head(5)
     .collect()
 )
 # No.
 
 # Are county names unique?
-cities_df.select(
-    pl.col('County'),
-    pl.col('State')
-).group_by('County').agg(pl.len()).sort('len', descending=True).head(5).collect()
+(
+    cities_df.select(pl.col("County"), pl.col("State"))
+    .group_by("County")
+    .agg(pl.len())
+    .sort("len", descending=True)
+    .head(5)
+    .collect()
+)
 # No.
 
-# Are city, county combos unique?
+# Are city name, county combos unique?
 (
-    cities_df
-    .group_by('City', 'County')
-    .agg(pl.len().alias('count'))
-    .sort('count', descending=True)
+    cities_df.group_by("City", "County")
+    .agg(pl.len().alias("count"))
+    .sort("count", descending=True)
     .head(5)
     .collect()
 )
 # No.
 
 # We assume that (city, county, state) uniquely identifies a city.
-
-
